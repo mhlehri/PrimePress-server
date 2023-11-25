@@ -36,12 +36,16 @@ const schema = new mongoose.Schema({
 });
 const userSchema = new mongoose.Schema({
   name: String, // String is shorthand for {type: String}
-  email: String,
-  photo: String,
+  email: { type: String, unique: true },
+  img: String,
+  Premium: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const Articles = mongoose.model("Articles", schema);
-const UserSchema = mongoose.model("Users", userSchema);
+const Users = mongoose.model("Users", userSchema);
 // custom middleware for verifying token validity
 
 const verifyToken = (req, res, next) => {
@@ -101,14 +105,22 @@ async function run() {
       res.send(result);
     });
 
-    //? post articles
-    app.post("/addUser", async (req, res) => {
-      const user = req.body;
-      const articlesDoc = new Articles(user);
-      const result = await articlesDoc.save();
-      console.log(result);
-      res.send(result);
-    });
+    //? add users
+    try {
+      app.post("/addUser", async (req, res) => {
+        const user = req.body;
+        const userEmail = user.email;
+        const find = await Users.findOne({ email: userEmail });
+        if (find) {
+          return;
+        }
+        const userDoc = new Users(user);
+        const result = await userDoc.save();
+        res.send(result);
+      });
+    } catch (error) {
+      return console.log(error);
+    }
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
