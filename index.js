@@ -31,7 +31,7 @@ const schema = new mongoose.Schema({
     default: moment(new Date()).format("MMM Do YY"),
   },
   publisher: String,
-  view_count: Number,
+  view_count: { type: Number, default: 0 },
   status: { type: String, default: "pending" },
 });
 const userSchema = new mongoose.Schema({
@@ -82,7 +82,32 @@ async function run() {
       const search = req.query.search;
       const skip = (page - 1) * limit || 0;
       console.log(limit, page);
-      const result = await Articles.find().skip(skip).limit(limit);
+      const result = await Articles.find({ status: "notP" })
+        .skip(skip)
+        .limit(limit);
+      res.send(result);
+    });
+    // ? get trending articles
+    app.get("/trending", async (req, res) => {
+      const result = await Articles.find({ status: "notP" })
+        .sort({ view_count: -1 })
+        .limit(6);
+      res.send(result);
+    });
+
+    //? get single articles
+    app.get("/singleArticle/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const result = await Articles.findOne({
+        _id: id,
+      });
+      res.send(result);
+    });
+
+    //? get all users
+    app.get("/users", async (req, res) => {
+      const result = await Users.find();
       res.send(result);
     });
 
