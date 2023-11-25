@@ -3,7 +3,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-
+const moment = require("moment");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -20,19 +20,28 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
+//! schema
 const schema = new mongoose.Schema({
   title: String, // String is shorthand for {type: String}
   tags: String,
   category: String,
   article: String,
-  publish_date: { type: Date, default: Date.now },
+  publish_date: {
+    type: String,
+    default: moment(new Date()).format("MMM Do YY"),
+  },
   publisher: String,
   view_count: Number,
   status: { type: String, default: "pending" },
 });
+const userSchema = new mongoose.Schema({
+  name: String, // String is shorthand for {type: String}
+  email: String,
+  photo: String,
+});
 
-const Model = mongoose.model("Articles", schema);
-const doc = new Model();
+const Articles = mongoose.model("Articles", schema);
+const UserSchema = mongoose.model("Users", userSchema);
 // custom middleware for verifying token validity
 
 const verifyToken = (req, res, next) => {
@@ -61,12 +70,44 @@ mongoose
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    //? get all articles
 
+    //? get all articles
     app.get("/articles", async (req, res) => {
-      const article = await Model.find({}).exec();
-      console.log(article);
-      res.send(article);
+      const limit = req.query.limit;
+      const page = req.query.page;
+      const search = req.query.search;
+      const skip = (page - 1) * limit || 0;
+      console.log(limit, page);
+      const result = await Articles.find().skip(skip).limit(limit);
+      res.send(result);
+    });
+
+    //? get all articles
+    app.get("/singleArticle/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const result = await Articles.findOne({
+        _id: id,
+      });
+      res.send(result);
+    });
+
+    //? post articles
+    app.post("/addArticle", async (req, res) => {
+      const article = req.body;
+      const articlesDoc = new Articles(article);
+      const result = await articlesDoc.save();
+      console.log(result);
+      res.send(result);
+    });
+
+    //? post articles
+    app.post("/addUser", async (req, res) => {
+      const user = req.body;
+      const articlesDoc = new Articles(user);
+      const result = await articlesDoc.save();
+      console.log(result);
+      res.send(result);
     });
 
     app.post("/jwt", (req, res) => {
