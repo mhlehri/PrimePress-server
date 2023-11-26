@@ -22,7 +22,7 @@ app.use(cookieParser());
 
 //! schema
 const schema = new mongoose.Schema({
-  title: String, // String is shorthand for {type: String}
+  title: String,
   tags: String,
   category: String,
   article: String,
@@ -34,8 +34,9 @@ const schema = new mongoose.Schema({
   view_count: { type: Number, default: 0 },
   status: { type: String, default: "pending" },
 });
+
 const userSchema = new mongoose.Schema({
-  name: String, // String is shorthand for {type: String}
+  name: String,
   email: { type: String, unique: true },
   img: String,
   Premium: {
@@ -73,20 +74,30 @@ mongoose
 // Curd operation
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-
     //? get all articles
     app.get("/articles", async (req, res) => {
       const limit = req.query.limit;
       const page = req.query.page;
       const search = req.query.search;
+      const fileterQuery = req.query.filter;
+      console.log(fileterQuery);
       const skip = (page - 1) * limit || 0;
-      console.log(limit, page);
-      const result = await Articles.find({ status: "notP" })
-        .skip(skip)
-        .limit(limit);
-      res.send(result);
+      if (fileterQuery == "All" || undefined) {
+        const result = await Articles.find({ status: "notP" })
+          .skip(skip)
+          .limit(limit);
+        res.send(result);
+      } else {
+        const result = await Articles.find({
+          status: "notP",
+          tags: fileterQuery,
+        })
+          .skip(skip)
+          .limit(limit);
+        res.send(result);
+      }
     });
+
     // ? get trending articles
     app.get("/trending", async (req, res) => {
       const result = await Articles.find({ status: "notP" })
@@ -95,10 +106,35 @@ async function run() {
       res.send(result);
     });
 
+    // ? get recent articles
+    app.get("/recent", async (req, res) => {
+      const result = await Articles.find({ status: "notP" })
+        .sort({ publish_date: -1 })
+        .limit(2);
+      res.send(result);
+    });
+
+    // ? get premium articles
+    app.get("/premium", async (req, res) => {
+      const fileterQuery = req.query.filter;
+      console.log(fileterQuery);
+      if (fileterQuery == "All" || undefined) {
+        const result = await Articles.find({
+          category: "premium",
+        });
+        res.send(result);
+      } else {
+        const result = await Articles.find({
+          category: "premium",
+          tags: fileterQuery,
+        });
+        res.send(result);
+      }
+    });
+
     //? get single articles
     app.get("/singleArticle/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id);
       const result = await Articles.findOne({
         _id: id,
       });
@@ -110,11 +146,16 @@ async function run() {
       const result = await Users.find();
       res.send(result);
     });
+    //? get single user
+    app.get("/edit/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await Users.findOne({ email: email });
+      res.send(result);
+    });
 
     //? get all articles
     app.get("/singleArticle/:id", async (req, res) => {
       const id = req.params.id;
-      console.log(id);
       const result = await Articles.findOne({
         _id: id,
       });
@@ -126,7 +167,6 @@ async function run() {
       const article = req.body;
       const articlesDoc = new Articles(article);
       const result = await articlesDoc.save();
-      console.log(result);
       res.send(result);
     });
 
