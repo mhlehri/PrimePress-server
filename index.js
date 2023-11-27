@@ -116,20 +116,10 @@ async function run() {
 
     // ? get premium articles
     app.get("/premium", async (req, res) => {
-      const fileterQuery = req.query.filter;
-      console.log(fileterQuery);
-      if (fileterQuery == "All" || undefined) {
-        const result = await Articles.find({
-          category: "premium",
-        });
-        res.send(result);
-      } else {
-        const result = await Articles.find({
-          category: "premium",
-          tags: fileterQuery,
-        });
-        res.send(result);
-      }
+      const result = await Articles.find({
+        category: "premium",
+      });
+      res.send(result);
     });
 
     //? get single articles
