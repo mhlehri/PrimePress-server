@@ -43,6 +43,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  role: { type: String, default: null },
 });
 
 const Articles = mongoose.model("Articles", schema);
@@ -176,6 +177,17 @@ async function run() {
     } catch (error) {
       return console.log(error);
     }
+
+    //? update user to admin role
+    app.put("/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      const doc = await Users.findOneAndUpdate(
+        { _id: id },
+        { role: "admin" },
+        { returnOriginal: false }
+      );
+      res.send(doc);
+    });
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
