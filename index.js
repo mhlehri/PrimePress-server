@@ -24,11 +24,16 @@ app.use(cookieParser());
 const schema = new mongoose.Schema({
   title: String,
   tags: String,
-  category: String,
+  category: { type: String, default: "Basic" },
   article: String,
+  Aemail: String,
+  Aimage: String,
+  Aname: String,
+  image: String,
+  message: { type: String, default: "" },
   publish_date: {
     type: String,
-    default: moment(new Date()).format("MMM Do YY"),
+    default: moment(new Date()).format("YYYY-MM-DD"),
   },
   publisher: String,
   view_count: { type: Number, default: 0 },
@@ -45,9 +50,14 @@ const userSchema = new mongoose.Schema({
   },
   role: { type: String, default: null },
 });
+const publisherSchema = new mongoose.Schema({
+  publisher: String,
+  image: String,
+});
 
 const Articles = mongoose.model("Articles", schema);
 const Users = mongoose.model("Users", userSchema);
+const Publishers = mongoose.model("Publishers", publisherSchema);
 // custom middleware for verifying token validity
 
 const verifyToken = (req, res, next) => {
@@ -75,33 +85,34 @@ mongoose
 // Curd operation
 async function run() {
   try {
-    //? get all articles
+    //? get all articles (not Pending)
     app.get("/articles", async (req, res) => {
       const limit = req.query.limit;
       const page = req.query.page;
       const search = req.query.search;
-      const fileterQuery = req.query.filter;
-      console.log(fileterQuery);
-      const skip = (page - 1) * limit || 0;
-      if (fileterQuery == "All" || undefined) {
-        const result = await Articles.find({ status: "notP" })
-          .skip(skip)
-          .limit(limit);
-        res.send(result);
-      } else {
-        const result = await Articles.find({
-          status: "notP",
-          tags: fileterQuery,
-        })
-          .skip(skip)
-          .limit(limit);
-        res.send(result);
+      const { tags, publisher } = req.query;
+      const query = { status: "approved" };
+      if (tags) query.tags = tags;
+      if (publisher) query.publisher = publisher;
+      if (search) {
+        // Add search conditions to the query
+        query.$or = [{ title: { $regex: search, $options: "i" } }];
       }
+      console.log(tags, publisher, search);
+      const skip = (page - 1) * limit || 0;
+      const result = await Articles.find(query).skip(skip).limit(limit);
+      res.send(result);
+    });
+
+    //? all articles with every status
+    app.get("/allarticles", async (req, res) => {
+      const result = await Articles.find().sort({ publish_date: -1 });
+      res.send(result);
     });
 
     // ? get trending articles
     app.get("/trending", async (req, res) => {
-      const result = await Articles.find({ status: "notP" })
+      const result = await Articles.find({ status: "approved" })
         .sort({ view_count: -1 })
         .limit(6);
       res.send(result);
@@ -109,7 +120,7 @@ async function run() {
 
     // ? get recent articles
     app.get("/recent", async (req, res) => {
-      const result = await Articles.find({ status: "notP" })
+      const result = await Articles.find({ status: "approved" })
         .sort({ publish_date: -1 })
         .limit(2);
       res.send(result);
@@ -119,6 +130,15 @@ async function run() {
     app.get("/premium", async (req, res) => {
       const result = await Articles.find({
         category: "premium",
+      });
+      res.send(result);
+    });
+
+    // ? get  my articles
+    app.get("/myArticles/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await Articles.find({
+        Aemail: email,
       });
       res.send(result);
     });
@@ -144,12 +164,9 @@ async function run() {
       res.send(result);
     });
 
-    //? get all articles
-    app.get("/singleArticle/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await Articles.findOne({
-        _id: id,
-      });
+    //? get all publishers
+    app.get("/allPublishers", async (req, res) => {
+      const result = await Publishers.find();
       res.send(result);
     });
 
@@ -177,6 +194,18 @@ async function run() {
     } catch (error) {
       return console.log(error);
     }
+    //? add publishers
+    try {
+      app.post("/addPublishers", async (req, res) => {
+        const publisher = req.body;
+        const publisherDoc = new Publishers(publisher);
+        const result = await publisherDoc.save();
+        console.log(result);
+        res.send(result);
+      });
+    } catch (error) {
+      return console.log(error);
+    }
 
     //? update user to admin role
     app.put("/admin/:id", async (req, res) => {
@@ -187,6 +216,38 @@ async function run() {
         { returnOriginal: false }
       );
       res.send(doc);
+    });
+    //? update reason in article
+    app.put("/reason/:id", async (req, res) => {
+      const id = req.params.id;
+      const reason = req.body.message;
+      const doc = await Articles.findOneAndUpdate(
+        { _id: id },
+        { status: "declined", message: reason },
+        { returnOriginal: false }
+      );
+      console.log(doc);
+      res.send(doc);
+    });
+    //? update user to profile
+    app.put("/updateProfile", async (req, res) => {
+      const email = req.query.email;
+      const img = req.query.image;
+      const name = req.query.name;
+      const doc = await Users.findOneAndUpdate(
+        { email },
+        { img: img, name: name },
+        { returnOriginal: false }
+      );
+      console.log(doc);
+      res.send(doc);
+    });
+
+    //? delete article
+    app.delete("/deleteArticle/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await Articles.deleteOne({ _id: id });
+      res.send(result);
     });
 
     app.post("/jwt", (req, res) => {
