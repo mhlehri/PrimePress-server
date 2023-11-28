@@ -217,7 +217,8 @@ async function run() {
       );
       res.send(doc);
     });
-    //? update reason in article
+
+    //? update reason in articles
     app.put("/reason/:id", async (req, res) => {
       const id = req.params.id;
       const reason = req.body.message;
