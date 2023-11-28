@@ -100,7 +100,10 @@ async function run() {
       }
       console.log(tags, publisher, search);
       const skip = (page - 1) * limit || 0;
-      const result = await Articles.find(query).skip(skip).limit(limit);
+      const result = await Articles.find(query)
+        .sort({ publish_date: -1 })
+        .skip(skip)
+        .limit(limit);
       res.send(result);
     });
 
@@ -222,13 +225,26 @@ async function run() {
     app.put("/reason/:id", async (req, res) => {
       const id = req.params.id;
       const reason = req.body.message;
+      const status = req.body.status;
       const doc = await Articles.findOneAndUpdate(
         { _id: id },
-        { status: "declined", message: reason },
+        { status: status, message: reason },
         { returnOriginal: false }
       );
       console.log(doc);
       res.send(doc);
+    });
+
+    //? update single articles views
+    app.put("/viewArticle/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await Users.findOneAndUpdate(
+        { _id: id },
+        { view_count: view_count + 1 },
+        { returnOriginal: false }
+      );
+      console.log(result);
+      res.send(result);
     });
     //? update user to profile
     app.put("/updateProfile", async (req, res) => {
