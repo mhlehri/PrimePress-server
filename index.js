@@ -24,7 +24,7 @@ app.use(cookieParser());
 const schema = new mongoose.Schema({
   title: String,
   tags: String,
-  category: { type: String, default: "Basic" },
+  category: { type: String, default: "basic" },
   article: String,
   Aemail: String,
   Aimage: String,
@@ -123,7 +123,10 @@ async function run() {
 
     // ? get recent articles
     app.get("/recent", async (req, res) => {
-      const result = await Articles.find({ status: "approved" })
+      const result = await Articles.find({
+        status: "approved",
+        category: "basic",
+      })
         .sort({ publish_date: -1 })
         .limit(2);
       res.send(result);
@@ -161,7 +164,7 @@ async function run() {
       res.send(result);
     });
     //? get single user
-    app.get("/edit/:email", async (req, res) => {
+    app.get("/profile/:email", async (req, res) => {
       const email = req.params.email;
       const result = await Users.findOne({ email: email });
       res.send(result);
@@ -221,7 +224,7 @@ async function run() {
       res.send(doc);
     });
 
-    //? update reason in articles
+    //? update message in articles
     app.put("/reason/:id", async (req, res) => {
       const id = req.params.id;
       const reason = req.body.message;
@@ -238,15 +241,14 @@ async function run() {
     //? update single articles views
     app.put("/viewArticle/:id", async (req, res) => {
       const id = req.params.id;
-      const result = await Users.findOneAndUpdate(
-        { _id: id },
-        { view_count: view_count + 1 },
-        { returnOriginal: false }
-      );
+      const doc = await Articles.findById(id);
+      doc.view_count += 1;
+      const result = await doc.save();
       console.log(result);
       res.send(result);
     });
-    //? update user to profile
+
+    //? update user profile
     app.put("/updateProfile", async (req, res) => {
       const email = req.query.email;
       const img = req.query.image;
@@ -254,6 +256,18 @@ async function run() {
       const doc = await Users.findOneAndUpdate(
         { email },
         { img: img, name: name },
+        { returnOriginal: false }
+      );
+      console.log(doc);
+      res.send(doc);
+    });
+
+    //? update article category
+    app.put("/updateCategory/:id", async (req, res) => {
+      const id = req.params.id;
+      const doc = await Articles.findOneAndUpdate(
+        { _id: id },
+        { category: "premium" },
         { returnOriginal: false }
       );
       console.log(doc);
