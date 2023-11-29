@@ -4,6 +4,10 @@ const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const moment = require("moment");
+require("dotenv").config();
+
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -48,6 +52,7 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  premium_Exp: { type: Number, default: null },
   role: { type: String, default: null },
 });
 const publisherSchema = new mongoose.Schema({
@@ -141,12 +146,16 @@ async function run() {
     });
 
     // ? get  my articles
-    app.get("/myArticles/:email", async (req, res) => {
+    app.get("/myArticles/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
-      const result = await Articles.find({
-        Aemail: email,
-      });
-      res.send(result);
+      if (email === req.user.email) {
+        const result = await Articles.find({
+          Aemail: email,
+        });
+        res.send(result);
+      } else {
+        res.status(403).send({ message: "unauthorized" });
+      }
     });
 
     //? get single articles
@@ -164,10 +173,14 @@ async function run() {
       res.send(result);
     });
     //? get single user
-    app.get("/profile/:email", async (req, res) => {
+    app.get("/profile/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
-      const result = await Users.findOne({ email: email });
-      res.send(result);
+      if (req.user.email === email) {
+        const result = await Users.findOne({ email: email });
+        res.send(result);
+      } else {
+        res.status(403).send({ message: "unauthorize access" });
+      }
     });
 
     //? get all publishers
@@ -218,7 +231,7 @@ async function run() {
       const id = req.params.id;
       const doc = await Users.findOneAndUpdate(
         { _id: id },
-        { role: "admin" },
+        { role: "admin", Premium: true },
         { returnOriginal: false }
       );
       res.send(doc);
@@ -249,17 +262,21 @@ async function run() {
     });
 
     //? update user profile
-    app.put("/updateProfile", async (req, res) => {
+    app.put("/updateProfile", verifyToken, async (req, res) => {
       const email = req.query.email;
       const img = req.query.image;
       const name = req.query.name;
-      const doc = await Users.findOneAndUpdate(
-        { email },
-        { img: img, name: name },
-        { returnOriginal: false }
-      );
-      console.log(doc);
-      res.send(doc);
+      if (email === req.user.email) {
+        const doc = await Users.findOneAndUpdate(
+          { email },
+          { img: img, name: name },
+          { returnOriginal: false }
+        );
+        console.log(doc);
+        res.send(doc);
+      } else {
+        res.status(403).send({ message: "unauthorized" });
+      }
     });
 
     //? update article category
@@ -274,11 +291,44 @@ async function run() {
       res.send(doc);
     });
 
+    //? update user Premium and exp date
+    app.put("/updateUserPremium/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email === req.user.email) {
+        const { isPremium, _Exp } = req.body;
+        const doc = await Users.findOneAndUpdate(
+          { email: email },
+          { Premium: isPremium, premium_Exp: _Exp },
+          { returnOriginal: false }
+        );
+        console.log(doc);
+        res.send(doc);
+      } else {
+        res.status(403);
+      }
+    });
+
     //? delete article
     app.delete("/deleteArticle/:id", async (req, res) => {
       const id = req.params.id;
       const result = await Articles.deleteOne({ _id: id });
       res.send(result);
+    });
+
+    //? create a paymentIntent with the order amount and currency
+    app.post("/createPaymentIntent", verifyToken, async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
     });
 
     app.post("/jwt", (req, res) => {
