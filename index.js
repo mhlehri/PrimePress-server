@@ -3,8 +3,8 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-const moment = require("moment");
 require("dotenv").config();
+const moment = require("moment");
 
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
@@ -14,10 +14,7 @@ const port = process.env.PORT || 5000;
 // middlewares
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://fantastic-marzipan-a57ea1.netlify.app",
-    ],
+    origin: ["http://localhost:5173", "https://primepress.netlify.app"],
     credentials: true,
   })
 );
@@ -37,7 +34,6 @@ const schema = new mongoose.Schema({
   message: { type: String, default: "" },
   publish_date: {
     type: String,
-    default: moment(new Date()).format("YYYY-MM-DD"),
   },
   publisher: String,
   view_count: { type: Number, default: 0 },
@@ -65,31 +61,37 @@ const Users = mongoose.model("Users", userSchema);
 const Publishers = mongoose.model("Publishers", publisherSchema);
 // custom middleware for verifying token validity
 
-const verifyToken = (req, res, next) => {
-  const token = req.cookies.token;
-  if (!token) {
-    return res.status(401).send({ message: "unauthorized access!" });
-  }
-  jwt.verify(token, "secret", (err, decoded) => {
-    if (err) {
-      return res.status(401).send({ message: "unauthorized access!" });
-    }
-    req.user = decoded;
-    next();
-  });
-};
+const secret = process.env.ACCESS_TOKEN;
+const user = process.env.DB_USER;
+const pass = process.env.DB_PASS;
 
 mongoose
   .connect(
-    "mongodb+srv://mahmudhassanlehri:mhlehri101@cluster0.yynznjj.mongodb.net/" +
+    `mongodb+srv://${user}:${pass}@cluster0.yynznjj.mongodb.net/` +
       "NewspaperDB?retryWrites=true&w=majority"
   )
   .then(() => {
     console.log("db connection established");
   });
+
 // Curd operation
 async function run() {
   try {
+    const verifyToken = (req, res, next) => {
+      const token = req?.cookies?.token;
+      console.log("82", token);
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized vai...." });
+      }
+      jwt.verify(token, secret, (err, decoded) => {
+        if (err) {
+          console.log("88", err.message);
+          return res.status(401).send({ message: "unauthorized access" });
+        }
+        req.user = decoded;
+        next();
+      });
+    };
     //? get all articles (not Pending)
     app.get("/articles", async (req, res) => {
       const limit = req.query.limit;
@@ -103,7 +105,6 @@ async function run() {
         // Add search conditions to the query
         query.$or = [{ title: { $regex: search, $options: "i" } }];
       }
-      console.log(tags, publisher, search);
       const skip = (page - 1) * limit || 0;
       const result = await Articles.find(query)
         .sort({ publish_date: -1 })
@@ -175,6 +176,7 @@ async function run() {
     //? get single user
     app.get("/profile/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
+      console.log(req.user.email);
       if (req.user.email === email) {
         const result = await Users.findOne({ email: email });
         res.send(result);
@@ -219,14 +221,13 @@ async function run() {
         const publisher = req.body;
         const publisherDoc = new Publishers(publisher);
         const result = await publisherDoc.save();
-        console.log(result);
         res.send(result);
       });
     } catch (error) {
       return console.log(error);
     }
 
-    //? update user to admin role
+    //! update user to admin role
     app.put("/admin/:id", async (req, res) => {
       const id = req.params.id;
       const doc = await Users.findOneAndUpdate(
@@ -237,27 +238,40 @@ async function run() {
       res.send(doc);
     });
 
-    //? update message in articles
+    //! update message in articles
     app.put("/reason/:id", async (req, res) => {
       const id = req.params.id;
-      const reason = req.body.message;
-      const status = req.body.status;
+      const { message, status } = req.body;
       const doc = await Articles.findOneAndUpdate(
         { _id: id },
-        { status: status, message: reason },
+        { status: status, message: message },
         { returnOriginal: false }
       );
-      console.log(doc);
       res.send(doc);
     });
 
-    //? update single articles views
+    //! update articles
+    app.put("/editArticles/:id", async (req, res) => {
+      const id = req.params.id;
+      const { publisher, image, tags, title, article } = req.body;
+      const query = {};
+      if (publisher) query.publisher = publisher;
+      if (image) query.image = image;
+      if (tags) query.tags = tags;
+      if (title) query.title = title;
+      if (article) query.article = article;
+      const doc = await Articles.findOneAndUpdate({ _id: id }, query, {
+        returnOriginal: false,
+      });
+      res.send(doc);
+    });
+
+    //! update single articles views
     app.put("/viewArticle/:id", async (req, res) => {
       const id = req.params.id;
       const doc = await Articles.findById(id);
       doc.view_count += 1;
       const result = await doc.save();
-      console.log(result);
       res.send(result);
     });
 
@@ -272,7 +286,6 @@ async function run() {
           { img: img, name: name },
           { returnOriginal: false }
         );
-        console.log(doc);
         res.send(doc);
       } else {
         res.status(403).send({ message: "unauthorized" });
@@ -287,7 +300,6 @@ async function run() {
         { category: "premium" },
         { returnOriginal: false }
       );
-      console.log(doc);
       res.send(doc);
     });
 
@@ -301,7 +313,6 @@ async function run() {
           { Premium: isPremium, premium_Exp: _Exp },
           { returnOriginal: false }
         );
-        console.log(doc);
         res.send(doc);
       } else {
         res.status(403);
@@ -331,15 +342,17 @@ async function run() {
       });
     });
 
-    app.post("/jwt", (req, res) => {
+    app.post("/jwt", async (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, "secret", { expiresIn: "24h" });
-
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
+        expiresIn: "24h",
+      });
+      console.log(token);
       res
         .cookie("token", token, {
           httpOnly: true,
-          secure: true,
-          sameSite: "none",
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
         })
         .send({ success: true });
     });
@@ -353,7 +366,6 @@ async function run() {
         })
         .send({ success: true });
     });
-    console.log("");
   } finally {
     // Ensures that the client will close when you finish/error
   }
